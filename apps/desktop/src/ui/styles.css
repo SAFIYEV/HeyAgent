@@ -470,6 +470,15 @@ input::placeholder { color: #69758d; }
   gap: 6px;
 }
 
+.onboard-steps { display: flex; gap: 8px; margin: 14px 0 18px; padding: 0; list-style: none; color: var(--text-dim); font-size: 10px; }
+.onboard-steps li { padding: 5px 7px; border: 1px solid var(--border); border-radius: 999px; }
+.onboard-steps li.active { border-color: var(--accent); color: var(--accent); }
+.field-label + select { width: 100%; margin: 6px 0 14px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; color: var(--text); background: var(--surface-strong); }
+
+.starter-missions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; padding: 12px 0; }
+.starter-missions button { min-height: 46px; padding: 8px; border: 1px solid var(--border); border-radius: 11px; color: #bfc9dc; background: rgba(155, 108, 255, .06); text-align: left; font: 11px/1.2 inherit; cursor: pointer; }
+.starter-missions button:hover { border-color: var(--accent-2); color: var(--text); }
+
 .avatar-option {
   aspect-ratio: 1;
   min-width: 0;
@@ -509,6 +518,16 @@ input::placeholder { color: #69758d; }
   font-size: 11px;
   line-height: 1.45;
 }
+.mission-list .mission-card { display: grid; gap: 5px; padding: 11px 2px; }
+.mission-card strong { color: var(--text); font-size: 11px; }
+.mission-card small { color: var(--text-dim); overflow-wrap: anywhere; }
+.mission-actions { display: flex; gap: 6px; }
+.mission-actions .btn { padding: 5px 8px; font-size: 10px; }
+
+.preflight { display: grid; gap: 6px; margin-top: 12px; }
+.preflight-row { padding: 9px 10px; border: 1px solid var(--border); border-radius: 10px; font-size: 11px; color: var(--text-dim); }
+.preflight-row.ok { border-color: rgba(101, 240, 186, .22); color: #a7dbc9; }
+.preflight-row.needs-action { border-color: rgba(255, 180, 80, .32); color: #f0ca8b; }
 
 .approvals { margin-top: 15px; }
 .approval-card {

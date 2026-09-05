@@ -491,6 +491,21 @@ npm run dev:desktop
 
 The desktop companion provides chat, missions, model status, integration status, approvals, and a tray menu.
 
+### Desktop first-run flow
+
+On a fresh install, the desktop app can create the agent profile directly: choose a language, name, pixel avatar, and working style. The choice is saved locally in `~/.heyagent/identity.json` and the workspace files are created automatically.
+
+After creating the profile, open **Models** and click **Проверить готовность**. The preflight report shows whether the profile exists, a default model is selected, local credentials are available, and HeyAgent will use your real or guest browser profile. **Проверить подключение** sends a real request to the configured model; it is not merely a UI status refresh.
+
+API keys and OAuth credentials deliberately remain terminal setup steps, so they are never entered into the desktop renderer:
+
+```bash
+npx hey models auth openai
+npx hey models set openai/gpt-4.1
+```
+
+The chat screen includes safe starter tasks for a first run. The Missions tab shows each mission's current status and planned steps; active missions can be paused or cancelled individually. Sensitive actions continue to appear as approval cards before they run.
+
 ## Configuration
 
 HeyAgent stores local state under:

@@ -8,8 +8,10 @@ import {
   loadConfig,
   PRODUCT_NAME,
   resolveLocale,
+  saveConfig,
+  type SupportedLocale,
 } from "@heyagent/shared";
-import { loadIdentity } from "@heyagent/identity";
+import { createIdentity, ensureWorkspace, loadIdentity } from "@heyagent/identity";
 import {
   AgentRuntime,
   cronDueJobs,
@@ -21,7 +23,7 @@ import {
 import { TelegramChannel } from "@heyagent/channels-telegram";
 import { ensureHeyAgentHome } from "@heyagent/integrations";
 import { globalMissionQueue, persistMissionQueue } from "@heyagent/orchestrator";
-import { PROVIDERS, resolveApiKeyForProvider } from "@heyagent/models";
+import { PROVIDERS, resolveApiKeyForProvider, smokeTest } from "@heyagent/models";
 import { adminStatusReport, isElevatedAdmin, relaunchElevated } from "@heyagent/computer";
 import { platform } from "node:os";
 
@@ -319,6 +321,35 @@ async function handleHttp(req: IncomingMessage, res: ServerResponse): Promise<vo
     return;
   }
 
+  // The desktop shell used to pretend that onboarding was complete and only
+  // showed a terminal command. Keep this endpoint deliberately small: it
+  // stores identity and presentation preferences, never credentials.
+  if (url.pathname === "/onboard" && req.method === "POST") {
+    try {
+      const body = JSON.parse((await readBody(req)) || "{}") as {
+        name?: string;
+        avatarId?: string;
+        persona?: string;
+        locale?: SupportedLocale;
+      };
+      const locale: SupportedLocale = body.locale === "en" ? "en" : "ru";
+      const identity = await createIdentity(
+        String(body.name ?? ""),
+        String(body.avatarId ?? ""),
+        String(body.persona ?? "friendly"),
+        locale,
+      );
+      await ensureWorkspace(locale);
+      const config = await loadConfig();
+      config.user = { ...config.user, locale };
+      await saveConfig(config);
+      json(res, 201, { ok: true, identity });
+    } catch (err) {
+      json(res, 400, { error: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
   if (url.pathname === "/status" && req.method === "GET") {
     const config = await loadConfig();
     const identity = await loadIdentity();
@@ -362,6 +393,40 @@ async function handleHttp(req: IncomingMessage, res: ServerResponse): Promise<vo
     return;
   }
 
+  if (url.pathname === "/models/test" && req.method === "POST") {
+    const config = await loadConfig();
+    const provider = config.models?.defaultProvider;
+    const model = config.models?.defaultModel;
+    if (!provider || !model) {
+      json(res, 400, { ok: false, message: "Сначала выберите и подключите модель." });
+      return;
+    }
+    try {
+      json(res, 200, await smokeTest({ provider, model }));
+    } catch (err) {
+      json(res, 200, { ok: false, message: err instanceof Error ? err.message : String(err) });
+    }
+    return;
+  }
+
+  if (url.pathname === "/preflight" && req.method === "GET") {
+    const config = await loadConfig();
+    const identity = await loadIdentity();
+    const provider = config.models?.defaultProvider;
+    const model = config.models?.defaultModel;
+    const hasModelKey = provider ? Boolean(await resolveApiKeyForProvider(provider)) : false;
+    json(res, 200, {
+      ready: Boolean(identity && provider && model && hasModelKey),
+      checks: [
+        { id: "identity", ok: Boolean(identity), label: "Профиль агента", detail: identity?.name || "Не настроен" },
+        { id: "model", ok: Boolean(provider && model), label: "Модель", detail: provider && model ? `${provider}/${model}` : "Не выбрана" },
+        { id: "credentials", ok: hasModelKey, label: "Доступ к модели", detail: hasModelKey ? "Ключ найден локально" : "Подключите ключ в терминале" },
+        { id: "browser", ok: true, label: "Браузер", detail: config.features?.browserRealProfile === false ? "Гостевой профиль" : "Ваш профиль (по умолчанию)" },
+      ],
+    });
+    return;
+  }
+
   if (url.pathname === "/missions" && req.method === "GET") {
     const history = await listMissionHistory(15);
     json(res, 200, {
@@ -372,6 +437,7 @@ async function handleHttp(req: IncomingMessage, res: ServerResponse): Promise<vo
         requiresUi: m.requiresUi,
         updatedAt: m.updatedAt,
         harness: m.plan?.steps?.[0]?.kind,
+        steps: m.plan?.steps?.map((step) => ({ kind: step.kind, status: step.status })) ?? [],
       })),
       activeUi: globalMissionQueue.activeUi()?.id ?? null,
       history,

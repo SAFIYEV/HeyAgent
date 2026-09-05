@@ -81,6 +81,13 @@ function applyProductLocale(locale, persist = true) {
   if (active === "models") void refreshModels();
 }
 
+async function api(path, options) {
+  const response = await fetch(`${GATEWAY}${path}`, options);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || data.message || `HTTP ${response.status}`);
+  return data;
+}
+
 const AVATARS = [
   { id: "sprite-01", label: "Cyan Bot", color: "#3dd9c4" },
   { id: "sprite-02", label: "Amber Scout", color: "#f5a623" },
@@ -251,11 +258,11 @@ function setupTabs() {
 function setupMissions() {
   document.getElementById("missions-refresh")?.addEventListener("click", () => void refreshMissions());
   document.getElementById("missions-pause")?.addEventListener("click", async () => {
-    await fetch(`${GATEWAY}/missions/pause`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    await api("/missions/pause", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
     void refreshMissions();
   });
   document.getElementById("missions-cancel")?.addEventListener("click", async () => {
-    await fetch(`${GATEWAY}/missions/cancel`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    await api("/missions/cancel", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
     void refreshMissions();
   });
 }
@@ -276,13 +283,41 @@ async function refreshMissions() {
       `${t("pendingApprovals")}: ${status.pendingApprovals ?? 0}`,
       "", `${t("cron")}:`, missions.cron || `(${t("none")})`,
     ].join("\n");
-    renderList(queueEl, missions.queue || [], t("queueEmpty"), (mission) =>
-      `[${mission.status}] ${mission.harness || "?"} — ${(mission.goal || "").slice(0, 80)}`);
+    renderMissionList(queueEl, missions.queue || []);
     renderList(historyEl, missions.history || [], t("noHistory"), (item) =>
       `${(item.at || "").slice(0, 16)} · ${item.harness || "?"} — ${(item.goal || "").slice(0, 70)}`);
   } catch {
     statusEl.textContent = t("gatewayOffline");
   }
+}
+
+function renderMissionList(element, missions) {
+  element.replaceChildren();
+  if (!missions.length) return renderList(element, [], t("queueEmpty"), () => "");
+  missions.forEach((mission) => {
+    const li = document.createElement("li");
+    li.className = "mission-card";
+    const title = document.createElement("strong");
+    title.textContent = `[${mission.status}] ${(mission.goal || "").slice(0, 100)}`;
+    const meta = document.createElement("small");
+    const steps = (mission.steps || []).map((step) => step.kind).join(" → ");
+    meta.textContent = `${mission.harness || "llm"}${steps ? ` · ${steps}` : ""}`;
+    const actions = document.createElement("div");
+    actions.className = "mission-actions";
+    if (!["done", "cancelled", "failed"].includes(mission.status)) {
+      actions.append(
+        approvalButton(t("pause"), "btn", () => missionAction("pause", mission.id)),
+        approvalButton(t("cancelAll"), "btn danger", () => missionAction("cancel", mission.id)),
+      );
+    }
+    li.append(title, meta, actions);
+    element.appendChild(li);
+  });
+}
+
+async function missionAction(action, id) {
+  await api(`/missions/${action}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+  void refreshMissions();
 }
 
 function renderList(element, items, emptyText, format) {
@@ -296,7 +331,36 @@ function renderList(element, items, emptyText, format) {
 }
 
 function setupModelsPanel() {
-  document.getElementById("test-model")?.addEventListener("click", () => void refreshModels());
+  document.getElementById("test-model")?.addEventListener("click", () => void testModel());
+  document.getElementById("run-preflight")?.addEventListener("click", () => void refreshPreflight());
+}
+
+async function testModel() {
+  const element = document.getElementById("model-status");
+  element.textContent = "Проверяю модель…";
+  try {
+    const data = await api("/models/test", { method: "POST" });
+    element.textContent = `${data.ok ? "✓" : "✕"} ${data.message}`;
+  } catch (error) {
+    element.textContent = `${t("error")}: ${error.message}`;
+  }
+}
+
+async function refreshPreflight() {
+  const element = document.getElementById("preflight");
+  element.textContent = "Проверяю готовность…";
+  try {
+    const data = await api("/preflight");
+    element.replaceChildren();
+    data.checks.forEach((check) => {
+      const row = document.createElement("div");
+      row.className = `preflight-row ${check.ok ? "ok" : "needs-action"}`;
+      row.textContent = `${check.ok ? "✓" : "!"} ${check.label}: ${check.detail}`;
+      element.appendChild(row);
+    });
+  } catch (error) {
+    element.textContent = `${t("error")}: ${error.message}`;
+  }
 }
 
 async function refreshModels() {
@@ -388,14 +452,28 @@ function setupAvatarGrid() {
 }
 
 function setupOnboard() {
-  document.getElementById("onboard-btn").addEventListener("click", () => {
+  document.getElementById("onboard-btn").addEventListener("click", async () => {
     const name = document.getElementById("name-input").value.trim();
     if (!name) return alert(t("enterName"));
-    alert(`${t("terminalSetup")}:\nhey onboard --locale ${productLocale}\n\n${t("name")}: ${name}\n${t("avatar")}: ${selectedAvatar}`);
-    document.getElementById("agent-name").textContent = name;
-    paintHero(selectedAvatar);
-    document.getElementById("onboard").classList.add("hidden");
-    document.getElementById("chat").classList.remove("hidden");
+    const button = document.getElementById("onboard-btn");
+    const status = document.getElementById("onboard-status");
+    button.disabled = true;
+    status.textContent = "Сохраняю профиль…";
+    try {
+      const data = await api("/onboard", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, avatarId: selectedAvatar, persona: document.getElementById("persona-input").value, locale: productLocale }),
+      });
+      document.getElementById("agent-name").textContent = data.identity.name;
+      paintHero(data.identity.avatarId);
+      document.getElementById("onboard").classList.add("hidden");
+      document.getElementById("chat").classList.remove("hidden");
+      void refreshPreflight();
+    } catch (error) {
+      status.textContent = `${t("error")}: ${error.message}. Запустите gateway и повторите.`;
+    } finally {
+      button.disabled = false;
+    }
   });
 }
 
@@ -404,6 +482,12 @@ function setupChat() {
   const input = document.getElementById("chat-input");
   const messages = document.getElementById("messages");
   const send = document.getElementById("chat-send");
+  document.querySelectorAll("[data-prompt]").forEach((button) => {
+    button.addEventListener("click", () => {
+      input.value = button.dataset.prompt;
+      input.focus();
+    });
+  });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const text = input.value.trim();

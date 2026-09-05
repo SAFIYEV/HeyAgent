@@ -39,11 +39,15 @@
         <p class="eyebrow" data-i18n="firstLaunch">ПЕРВЫЙ ЗАПУСК</p>
         <h2 data-i18n="onboardTitle">Назовите агента</h2>
         <p class="section-copy" data-i18n="onboardCopy">Создайте персонального помощника — настройки можно изменить позже.</p>
+        <ol class="onboard-steps" aria-label="Onboarding progress"><li class="active">1. Профиль</li><li>2. Готовность</li><li>3. Первая задача</li></ol>
         <label class="field-label" for="name-input" data-i18n="agentName">Имя агента</label>
         <input id="name-input" type="text" placeholder="Pixel" maxlength="24" />
+        <label class="field-label" for="persona-input">Стиль работы</label>
+        <select id="persona-input"><option value="friendly">Дружелюбный</option><option value="concise">Краткий</option><option value="proactive">Проактивный</option></select>
         <h3 data-i18n="avatarTitle">Выберите аватар</h3>
         <div id="avatar-grid" class="avatar-grid"></div>
         <button id="onboard-btn" class="btn primary wide" data-i18n="continue">Продолжить</button>
+        <p id="onboard-status" class="hint" aria-live="polite"></p>
       </section>
 
       <section id="chat" class="panel chat-panel">
@@ -53,6 +57,12 @@
             <h2 data-i18n="readyTitle">Готов к работе</h2>
             <p data-i18n="readyCopy">Спросите что угодно или поручите задачу.</p>
           </div>
+        </div>
+        <div id="starter-missions" class="starter-missions" aria-label="Быстрый старт">
+          <button type="button" data-prompt="Покажи точное время и дату">⏱ Узнать время</button>
+          <button type="button" data-prompt="Открой YouTube и найди урок по английскому для начинающих">▶ Найти урок</button>
+          <button type="button" data-prompt="Создай заметку со списком покупок: молоко, хлеб, яблоки">✎ Создать заметку</button>
+          <button type="button" data-prompt="Каждый день в 9 утра готовь краткий дайджест">◷ Поставить дайджест</button>
         </div>
         <form id="chat-form" class="chat-form">
           <input id="chat-input" type="text" data-i18n-placeholder="chatPlaceholder" placeholder="Напишите запрос…" autocomplete="off" />
@@ -91,7 +101,9 @@
         <h2 data-i18n="models">Модели</h2>
         <p class="section-copy"><span data-i18n="configureTerminal">Настройте через терминал:</span> <code>hey models auth openai</code></p>
         <button id="test-model" class="btn primary" data-i18n="testConnection">Проверить подключение</button>
+        <button id="run-preflight" class="btn" type="button">Проверить готовность</button>
         <pre id="model-status" class="data-card"></pre>
+        <div id="preflight" class="preflight" aria-live="polite"></div>
       </section>
 
       <section id="connect" class="panel hidden">
@@ -103,6 +115,7 @@
         </div>
         <ul id="integration-list" class="integration-list"></ul>
         <p class="hint"><span data-i18n="run">Выполните:</span> <code>hey connect google</code> <span data-i18n="or">или</span> <code>hey connect notion</code>.</p>
+        <p class="hint">Ключ модели: <code>hey models auth openai</code>, затем <code>hey models set openai/gpt-4.1</code>.</p>
       </section>
     </main>
 
