@@ -1,131 +1,314 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="color-scheme" content="dark" />
-  <title>HeyAgent</title>
-  <link rel="stylesheet" href="styles.css" />
-</head>
-<body>
-  <div id="app">
-    <header class="hero">
-      <div class="topbar">
-        <div class="brand" aria-label="HeyAgent">
-          <span class="brand-mark">H</span>
-          <span>HeyAgent</span>
-        </div>
-        <div class="locale-switch" role="group" aria-label="Interface language">
-          <button type="button" data-locale="ru">RU</button>
-          <button type="button" data-locale="en">EN</button>
-        </div>
-      </div>
-
-      <div class="avatar-stage">
-        <span class="pixel-particle particle-one"></span>
-        <span class="pixel-particle particle-two"></span>
-        <span class="pixel-particle particle-three"></span>
-        <canvas id="avatar" class="avatar idle" width="96" height="96" aria-hidden="true"></canvas>
-      </div>
-      <h1 id="agent-name">HeyAgent</h1>
-      <div class="status-line">
-        <span id="status-dot" class="status-dot connecting"></span>
-        <span id="agent-status" data-i18n="connecting">Подключение…</span>
-      </div>
-    </header>
-
-    <main class="content">
-      <section id="onboard" class="panel surface hidden">
-        <p class="eyebrow" data-i18n="firstLaunch">ПЕРВЫЙ ЗАПУСК</p>
-        <h2 data-i18n="onboardTitle">Назовите агента</h2>
-        <p class="section-copy" data-i18n="onboardCopy">Создайте персонального помощника — настройки можно изменить позже.</p>
-        <ol class="onboard-steps" aria-label="Onboarding progress"><li class="active">1. Профиль</li><li>2. Готовность</li><li>3. Первая задача</li></ol>
-        <label class="field-label" for="name-input" data-i18n="agentName">Имя агента</label>
-        <input id="name-input" type="text" placeholder="Pixel" maxlength="24" />
-        <label class="field-label" for="persona-input">Стиль работы</label>
-        <select id="persona-input"><option value="friendly">Дружелюбный</option><option value="concise">Краткий</option><option value="proactive">Проактивный</option></select>
-        <h3 data-i18n="avatarTitle">Выберите аватар</h3>
-        <div id="avatar-grid" class="avatar-grid"></div>
-        <button id="onboard-btn" class="btn primary wide" data-i18n="continue">Продолжить</button>
-        <p id="onboard-status" class="hint" aria-live="polite"></p>
-      </section>
-
-      <section id="chat" class="panel chat-panel">
-        <div id="messages" class="messages" aria-live="polite">
-          <div id="chat-empty" class="empty-state">
-            <div class="empty-icon">›_</div>
-            <h2 data-i18n="readyTitle">Готов к работе</h2>
-            <p data-i18n="readyCopy">Спросите что угодно или поручите задачу.</p>
-          </div>
-        </div>
-        <div id="starter-missions" class="starter-missions" aria-label="Быстрый старт">
-          <button type="button" data-prompt="Покажи точное время и дату">⏱ Узнать время</button>
-          <button type="button" data-prompt="Открой YouTube и найди урок по английскому для начинающих">▶ Найти урок</button>
-          <button type="button" data-prompt="Создай заметку со списком покупок: молоко, хлеб, яблоки">✎ Создать заметку</button>
-          <button type="button" data-prompt="Каждый день в 9 утра готовь краткий дайджест">◷ Поставить дайджест</button>
-        </div>
-        <form id="chat-form" class="chat-form">
-          <input id="chat-input" type="text" data-i18n-placeholder="chatPlaceholder" placeholder="Напишите запрос…" autocomplete="off" />
-          <button id="chat-send" type="submit" class="send-btn" data-i18n-title="send" title="Отправить">
-            <span data-i18n="send">Отправить</span>
-            <span aria-hidden="true">↗</span>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>HeyAgent</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="app" class="workspace-shell">
+      <aside class="sidebar">
+        <div class="brand-row">
+          <span class="brand">HeyAgent<span class="brand-dot"></span></span
+          ><button
+            id="sidebar-toggle"
+            class="icon-btn"
+            aria-label="Свернуть панель"
+          >
+            ◧
           </button>
-        </form>
-      </section>
-
-      <section id="missions" class="panel hidden">
-        <div class="section-head">
-          <div>
-            <p class="eyebrow" data-i18n="automation">АВТОМАТИЗАЦИЯ</p>
-            <h2 data-i18n="missions">Задачи</h2>
+        </div>
+        <button id="new-chat" class="nav-button">
+          <span>＋</span> Новый чат <kbd>Ctrl N</kbd>
+        </button>
+        <nav class="tabs" aria-label="Навигация">
+          <button class="tab active" data-tab="chat">
+            <span>◌</span><span data-i18n="chat">Чат</span></button
+          ><button class="tab" data-tab="skills">
+            <span>✧</span>Навыки <small id="skills-count">—</small></button
+          ><button class="tab" data-tab="missions">
+            <span>◷</span><span data-i18n="missions">Задачи</span></button
+          ><button class="tab" data-tab="connect">
+            <span>⌘</span><span data-i18n="services">Сервисы</span>
+          </button>
+        </nav>
+        <div class="sidebar-label">ВАШИ ЧАТЫ</div>
+        <input
+          id="chat-search"
+          class="search-input"
+          placeholder="Поиск чатов…"
+          aria-label="Поиск чатов"
+        />
+        <div id="chat-history" class="chat-history"></div>
+        <div class="sidebar-bottom">
+          <button class="tab" data-tab="models">
+            <span>⚙</span><span data-i18n="models">Модели</span>
+          </button>
+          <div class="profile">
+            <canvas
+              id="avatar"
+              width="96"
+              height="96"
+              aria-hidden="true"
+            ></canvas>
+            <div>
+              <strong id="agent-name">HeyAgent</strong
+              ><small>Персональный агент</small>
+            </div>
+            <div class="locale-switch">
+              <button data-locale="ru">RU</button
+              ><button data-locale="en">EN</button>
+            </div>
           </div>
-          <button id="missions-refresh" class="icon-btn" type="button" data-i18n-title="refresh" title="Обновить">↻</button>
         </div>
-        <div class="missions-actions">
-          <button id="missions-pause" class="btn" type="button" data-i18n="pause">Пауза</button>
-          <button id="missions-cancel" class="btn danger" type="button" data-i18n="cancelAll">Отменить все</button>
+      </aside>
+      <main class="workspace-main">
+        <header class="workspace-header">
+          <button id="sidebar-open" class="icon-btn" aria-label="Показать чаты">
+            ◧</button
+          ><span class="header-icon">▱</span
+          ><strong id="view-title">Новый чат</strong
+          ><span class="local-badge">Local</span
+          ><button
+            id="context-toggle"
+            class="icon-btn"
+            aria-label="Панель контекста"
+          >
+            ◫
+          </button>
+        </header>
+        <div class="workspace-body">
+          <div class="content">
+            <section id="chat" class="panel chat-panel">
+              <div id="messages" class="messages" aria-live="polite">
+                <div id="chat-empty" class="empty-state">
+                  <div class="hero-mark">h<span>↗</span></div>
+                  <p class="eyebrow">ВАШ КОМПЬЮТЕР. ВАШ АГЕНТ.</p>
+                  <h1>С чего начнём?</h1>
+                  <p>От идеи до результата — в одном рабочем пространстве.</p>
+                  <div id="starter-missions" class="starter-missions">
+                    <button
+                      data-prompt="Создай заметку со списком покупок: молоко, хлеб, яблоки"
+                    >
+                      <span>▤</span><strong>Создать документ</strong
+                      ><small>Заметки, отчёты и Google Docs</small></button
+                    ><button
+                      data-prompt="Найди последние новости об искусственном интеллекте и подготовь краткий дайджест"
+                    >
+                      <span>◎</span><strong>Исследовать тему</strong
+                      ><small>Поиск, источники и выводы</small></button
+                    ><button data-prompt="Покажи информацию о моём компьютере">
+                      <span>⌘</span><strong>Поработать с компьютером</strong
+                      ><small>Приложения, файлы и система</small>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="composer-wrap">
+                <div id="run-status" class="run-status" role="status"></div>
+                <form id="chat-form" class="chat-form">
+                  <div id="selected-skills" class="selected-skills"></div>
+                  <textarea
+                    id="chat-input"
+                    rows="2"
+                    placeholder="Поручите задачу HeyAgent…"
+                    aria-label="Сообщение агенту"
+                  ></textarea>
+                  <div class="composer-toolbar">
+                    <button
+                      id="choose-skills"
+                      type="button"
+                      class="composer-button"
+                    >
+                      ＋ <span>Навыки</span></button
+                    ><span id="policy-label" class="policy-label"
+                      >Доступы: —</span
+                    ><button
+                      id="composer-model"
+                      type="button"
+                      class="composer-button model-button"
+                    >
+                      Модель не подключена ⌄</button
+                    ><button
+                      id="chat-send"
+                      type="submit"
+                      class="send-btn"
+                      aria-label="Отправить"
+                    >
+                      ↑
+                    </button>
+                  </div>
+                </form>
+                <div class="composer-hint">
+                  Enter — отправить · Shift + Enter — новая строка
+                  <span>Работает на вашем компьютере</span>
+                </div>
+              </div>
+            </section>
+            <section id="skills" class="panel page-panel hidden">
+              <p class="eyebrow">РАСШИРЕНИЯ АГЕНТА</p>
+              <h1>Навыки</h1>
+              <p class="section-copy">
+                Готовые инструкции для ваших задач. Агент подбирает навыки
+                автоматически, а вы можете указать до шести для следующего
+                запроса.
+              </p>
+              <input
+                id="skill-search"
+                class="search-input"
+                placeholder="Найти навык…"
+                aria-label="Найти навык"
+              />
+              <p id="skill-status" class="hint" role="status"></p>
+              <div id="skill-grid" class="skill-grid"></div>
+            </section>
+            <section id="missions" class="panel page-panel hidden">
+              <div class="section-head">
+                <div>
+                  <p class="eyebrow">АВТОМАТИЗАЦИЯ</p>
+                  <h1 data-i18n="missions">Задачи</h1>
+                </div>
+                <button
+                  id="missions-refresh"
+                  class="icon-btn"
+                  aria-label="Обновить"
+                >
+                  ↻
+                </button>
+              </div>
+              <div class="missions-actions">
+                <button id="missions-pause" class="btn">Пауза всех</button
+                ><button id="missions-cancel" class="btn danger">
+                  Отменить все
+                </button>
+              </div>
+              <pre id="missions-status" class="data-card"></pre>
+              <h3>Очередь</h3>
+              <ul id="missions-queue" class="mission-list"></ul>
+              <h3>История выполнения</h3>
+              <ul id="missions-history" class="mission-list"></ul>
+            </section>
+            <section id="models-panel" class="panel page-panel hidden">
+              <p class="eyebrow">ИНТЕЛЛЕКТ</p>
+              <h1 data-i18n="models">Модели</h1>
+              <p class="section-copy">
+                Используйте облачную или локальную модель. Ключи сохраняются
+                через терминал: <code>hey models auth openai</code>
+              </p>
+              <button
+                id="test-model"
+                class="btn primary"
+                data-i18n="testConnection"
+              >
+                Проверить подключение</button
+              ><button id="run-preflight" class="btn">
+                Проверить готовность
+              </button>
+              <pre id="model-status" class="data-card"></pre>
+              <div id="preflight" class="preflight" aria-live="polite"></div>
+            </section>
+            <section id="connect" class="panel page-panel hidden">
+              <p class="eyebrow">РАБОЧЕЕ ПРОСТРАНСТВО</p>
+              <h1 data-i18n="services">Сервисы</h1>
+              <p class="section-copy">
+                Подключите привычные приложения к вашему агенту.
+              </p>
+              <ul id="integration-list" class="integration-list"></ul>
+              <p class="hint">
+                Подключение через терминал: <code>hey connect google</code>,
+                <code>hey connect gmail</code>, <code>hey connect notion</code>,
+                <code>hey connect github</code>.
+              </p>
+            </section>
+            <section id="onboard" class="panel page-panel hidden">
+              <p class="eyebrow">ЗНАКОМСТВО</p>
+              <h1 data-i18n="onboardTitle">Назовите агента</h1>
+              <p class="section-copy" data-i18n="onboardCopy">
+                Создайте персонального помощника.
+              </p>
+              <label class="field-label" for="name-input">Имя агента</label
+              ><input
+                id="name-input"
+                placeholder="Pixel"
+                maxlength="24"
+              /><label class="field-label" for="persona-input"
+                >Стиль работы</label
+              ><select id="persona-input">
+                <option value="friendly">Дружелюбный</option>
+                <option value="concise">Краткий</option>
+                <option value="proactive">Проактивный</option>
+              </select>
+              <h3>Ваш аватар</h3>
+              <div id="avatar-grid" class="avatar-grid"></div>
+              <button id="onboard-btn" class="btn primary">Продолжить</button>
+              <p id="onboard-status" class="hint" aria-live="polite"></p>
+            </section>
+          </div>
+          <aside class="context-panel">
+            <div class="context-card">
+              <div class="context-heading">Рабочая среда <span>⌘</span></div>
+              <div class="context-row">
+                <span>◉</span>
+                <div>
+                  <strong>Этот компьютер</strong
+                  ><small>Локальное выполнение</small>
+                </div>
+              </div>
+              <div class="context-row">
+                <span id="status-dot" class="status-dot"></span>
+                <div>
+                  <strong id="agent-status">Подключение…</strong
+                  ><small id="connection-detail"
+                    >Gateway · 127.0.0.1:28789</small
+                  >
+                </div>
+              </div>
+              <hr />
+              <div class="context-heading">
+                Навыки
+                <button
+                  id="context-skills"
+                  class="icon-btn"
+                  aria-label="Выбрать навыки"
+                >
+                  ＋
+                </button>
+              </div>
+              <div id="context-skill-list" class="context-skill-list">
+                Автоматический подбор по запросу
+              </div>
+              <hr />
+              <div class="context-heading">Подключения</div>
+              <div id="context-integrations" class="hint">
+                Проверка сервисов…
+              </div>
+              <button id="context-services" class="text-button">
+                Все сервисы ↗
+              </button>
+            </div>
+            <div id="approvals-box" class="approvals hidden">
+              <h3>Требуется подтверждение</h3>
+              <div id="approvals-list"></div>
+            </div>
+            <p class="context-footer">HeyAgent <span>LOCAL FIRST</span></p>
+          </aside>
         </div>
-        <pre id="missions-status" class="data-card"></pre>
-        <h3 data-i18n="queue">Очередь</h3>
-        <ul id="missions-queue" class="mission-list"></ul>
-        <h3 data-i18n="history">История</h3>
-        <ul id="missions-history" class="mission-list"></ul>
-        <div id="approvals-box" class="approvals hidden">
-          <h3 data-i18n="safePreview">Безопасное подтверждение</h3>
-          <div id="approvals-list"></div>
-        </div>
-      </section>
-
-      <section id="models-panel" class="panel hidden">
-        <p class="eyebrow" data-i18n="intelligence">ИНТЕЛЛЕКТ</p>
-        <h2 data-i18n="models">Модели</h2>
-        <p class="section-copy"><span data-i18n="configureTerminal">Настройте через терминал:</span> <code>hey models auth openai</code></p>
-        <button id="test-model" class="btn primary" data-i18n="testConnection">Проверить подключение</button>
-        <button id="run-preflight" class="btn" type="button">Проверить готовность</button>
-        <pre id="model-status" class="data-card"></pre>
-        <div id="preflight" class="preflight" aria-live="polite"></div>
-      </section>
-
-      <section id="connect" class="panel hidden">
-        <p class="eyebrow" data-i18n="workspace">РАБОЧЕЕ ПРОСТРАНСТВО</p>
-        <h2 data-i18n="services">Сервисы</h2>
-        <div class="connect-card">
-          <span class="connect-icon">⌁</span>
-          <p data-i18n="connectCopy">Подключайте Google Workspace, Notion и другие сервисы из терминала.</p>
-        </div>
-        <ul id="integration-list" class="integration-list"></ul>
-        <p class="hint"><span data-i18n="run">Выполните:</span> <code>hey connect google</code> <span data-i18n="or">или</span> <code>hey connect notion</code>.</p>
-        <p class="hint">Ключ модели: <code>hey models auth openai</code>, затем <code>hey models set openai/gpt-4.1</code>.</p>
-      </section>
-    </main>
-
-    <nav class="tabs">
-      <button data-tab="chat" class="tab active"><span class="tab-icon">◌</span><span data-i18n="chat">Чат</span></button>
-      <button data-tab="missions" class="tab"><span class="tab-icon">✓</span><span data-i18n="missions">Задачи</span></button>
-      <button data-tab="models" class="tab"><span class="tab-icon">◇</span><span data-i18n="models">Модели</span></button>
-      <button data-tab="connect" class="tab"><span class="tab-icon">⌁</span><span data-i18n="connect">Связи</span></button>
-    </nav>
-  </div>
-  <script src="app.js"></script>
-</body>
+      </main>
+    </div>
+    <dialog id="skill-dialog">
+      <div class="section-head">
+        <h2 id="skill-dialog-title"></h2>
+        <button id="close-skill" class="icon-btn" aria-label="Закрыть">
+          ×
+        </button>
+      </div>
+      <pre id="skill-dialog-body"></pre>
+      <button id="skill-dialog-select" class="btn primary">
+        Использовать в чате
+      </button>
+    </dialog>
+    <script src="app.js"></script>
+  </body>
 </html>

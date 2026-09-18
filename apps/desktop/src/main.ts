@@ -12,13 +12,13 @@ let isQuitting = false;
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
-    width: 480,
-    height: 720,
-    minWidth: 420,
-    minHeight: 620,
+    width: 1440,
+    height: 940,
+    minWidth: 760,
+    minHeight: 600,
     show: false,
     autoHideMenuBar: true,
-    backgroundColor: "#070a12",
+    backgroundColor: "#191919",
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

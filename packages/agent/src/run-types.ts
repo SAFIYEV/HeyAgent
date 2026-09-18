@@ -3,6 +3,8 @@ import type { ModelRef } from "@heyagent/models";
 
 export interface AgentRunOptions {
   sessionId?: string;
+  /** Explicitly selected installed skills; validated before execution. */
+  skillNames?: string[];
   channelKey?: string;
   channel?: AgentSession["channel"];
   modelRef?: ModelRef;

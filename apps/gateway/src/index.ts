@@ -19,9 +19,10 @@ import {
   cronList,
   listMissionHistory,
   tryHandleChatCommand,
+  loadSkills,
 } from "@heyagent/agent";
 import { TelegramChannel } from "@heyagent/channels-telegram";
-import { ensureHeyAgentHome } from "@heyagent/integrations";
+import { ensureHeyAgentHome, IntegrationsHub } from "@heyagent/integrations";
 import { globalMissionQueue, persistMissionQueue } from "@heyagent/orchestrator";
 import { PROVIDERS, resolveApiKeyForProvider, smokeTest } from "@heyagent/models";
 import { adminStatusReport, isElevatedAdmin, relaunchElevated } from "@heyagent/computer";
@@ -361,6 +362,7 @@ async function handleHttp(req: IncomingMessage, res: ServerResponse): Promise<vo
       locale: resolveLocale(config),
       identity: identity ? { name: identity.name, avatarId: identity.avatarId } : null,
       model: `${config.models?.defaultProvider}/${config.models?.defaultModel}`,
+      policyMode: config.policy?.mode ?? "ask",
       missions: {
         total: missions.length,
         activeUi: active?.id ?? null,
@@ -486,13 +488,30 @@ async function handleHttp(req: IncomingMessage, res: ServerResponse): Promise<vo
     return;
   }
 
+  if (url.pathname === "/skills" && req.method === "GET") {
+    json(res, 200, { skills: await loadSkills() });
+    return;
+  }
+
+  if (url.pathname === "/integrations" && req.method === "GET") {
+    json(res, 200, { integrations: await new IntegrationsHub().getStatus() });
+    return;
+  }
+
   if (url.pathname === "/chat" && req.method === "POST") {
     const body = await readBody(req);
-    const { message, sessionId } = JSON.parse(body) as {
+    const { message, sessionId, skillNames, requestId } = JSON.parse(body) as {
       message: string;
       sessionId?: string;
+      skillNames?: string[];
+      requestId?: string;
     };
     try {
+      if (typeof message !== "string" || !message.trim() ||
+          (skillNames !== undefined && (!Array.isArray(skillNames) || skillNames.length > 6 || skillNames.some((s) => typeof s !== "string")))) {
+        json(res, 400, { error: "Invalid message or skill selection" });
+        return;
+      }
       const cmd = await tryHandleChatCommand(message, {
         channel: "desktop",
         channelKey: `desktop:${sessionId || "main"}`,
@@ -507,7 +526,11 @@ async function handleHttp(req: IncomingMessage, res: ServerResponse): Promise<vo
       }
       const result = await agent.run(message, {
         sessionId,
+        skillNames,
         channel: "desktop",
+        onStatus: (status, detail) => {
+          if (typeof requestId === "string") broadcastWs({ type: "run_status", requestId, status, detail });
+        },
         onApprovalNeeded: requestApproval,
       });
       json(res, 200, result);

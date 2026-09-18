@@ -47,7 +47,7 @@ export async function loadSkills(): Promise<SkillMeta[]> {
           raw.match(/^description:\s*(.+)$/m)?.[1]?.trim() ||
           "HeyAgent skill";
         const body = raw.replace(/^---[\s\S]*?---\s*/, "").trim();
-        skills.push({ name, description, body: body.slice(0, 2400) });
+        skills.push({ name, description, body });
       } catch {
         /* skip */
       }
@@ -83,14 +83,23 @@ export function selectRelevantSkills(skills: SkillMeta[], userText: string, limi
   return picked.length ? picked : skills.slice(0, Math.min(4, skills.length));
 }
 
-export async function buildSkillsPromptBlock(userText = ""): Promise<string> {
+export function resolveSkills(all: SkillMeta[], userText: string, names: string[] = []): SkillMeta[] {
+  if (names.length > 6) throw new Error("Select at most 6 skills");
+  const selected = [...new Set(names)].map((name) => {
+    const skill = all.find((s) => s.name === name);
+    if (!skill) throw new Error(`Unknown skill: ${name}`);
+    return skill;
+  });
+  return [...selected, ...selectRelevantSkills(all, userText).filter((s) => !names.includes(s.name))].slice(0, Math.max(6, selected.length));
+}
+
+export async function buildSkillsPromptBlock(userText = "", names: string[] = []): Promise<string> {
   const all = await loadSkills();
-  if (!all.length) return "";
-  const skills = userText ? selectRelevantSkills(all, userText) : all.slice(0, 8);
+  const skills = resolveSkills(all, userText, names);
   const lines = [
     "## Skills (relevant playbooks — follow when they match)",
     ...skills.map(
-      (s) => `### skill:${s.name}\n${s.description}\n${s.body.slice(0, 1400)}`,
+      (s) => `### skill:${s.name}${names.includes(s.name) ? " (explicitly selected by the user)" : ""}\n${s.description}\n${s.body}`,
     ),
   ];
   return lines.join("\n\n");

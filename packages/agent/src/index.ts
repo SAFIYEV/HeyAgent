@@ -193,6 +193,10 @@ export class AgentRuntime {
   ): Promise<AgentRunResult> {
     await this.init();
 
+    const explicitSkillsBlock = options.skillNames?.length
+      ? await buildSkillsPromptBlock(userMessage, options.skillNames)
+      : undefined;
+
     const config = await loadConfig();
     const locale = resolveLocale(config);
     const identity = await loadIdentity();
@@ -299,7 +303,7 @@ export class AgentRuntime {
       clockEnabled: false, // clock already handled above
     });
     options.onStatus?.("thinking", `harness:${harness.id}`);
-    const harnessResult = await executeHarness(harness, {
+    const harnessResult = explicitSkillsBlock && harness.id !== "cancel" ? null : await executeHarness(harness, {
       userMessage,
       workingMessage,
       rereadPrefix,
@@ -360,7 +364,7 @@ export class AgentRuntime {
     await addMessage(session, { role: "user", content: userMessage });
 
     const memory = await loadMemory();
-    const skillsBlock = await buildSkillsPromptBlock(effectiveUserMessage);
+    const skillsBlock = explicitSkillsBlock ?? await buildSkillsPromptBlock(effectiveUserMessage);
     const workspaceBlock = await buildWorkspacePromptBlock(identity, locale);
     let liveMission: Mission = structuredClone(orch.mission);
     liveMission = beginStep(liveMission);

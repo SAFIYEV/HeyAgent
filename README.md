@@ -42,6 +42,8 @@ Most assistants stop at chat, shell commands, or isolated browser sandboxes. Hey
 - **Deterministic orchestration** — route → plan → harness/tool loop → verification, with queueing and loop protection.
 - **Model choice and failover** — cloud providers, AWS Bedrock, OpenRouter-compatible services, and local Ollama models.
 - **Safe voice degradation** — ElevenLabs is optional; unavailable or rejected voice requests silently fall back to text.
+- **Desktop workspace** — a three-column interface with saved chats, a skill catalog, execution status, and an environment panel.
+- **Explicit skill selection** — inspect installed playbooks and select up to six skills whose full instructions are supplied to the model.
 
 ## Contents
 
@@ -53,6 +55,7 @@ Most assistants stop at chat, shell commands, or isolated browser sandboxes. Hey
 - [Other integrations](#other-integrations)
 - [Voice replies](#voice-replies)
 - [Desktop application](#desktop-application)
+- [Skills](#skills)
 - [Configuration](#configuration)
 - [Security and permissions](#security-and-permissions)
 - [Architecture](#architecture)
@@ -489,7 +492,23 @@ In another terminal:
 npm run dev:desktop
 ```
 
-The desktop companion provides chat, missions, model status, integration status, approvals, and a tray menu.
+The desktop application provides a dark, three-column workspace:
+
+- **Sidebar:** new chats, searchable local chat history, skills, missions, services, and model settings.
+- **Conversation:** formatted responses, executed tool names, task progress, and a multiline composer with selected skills.
+- **Environment panel:** gateway connection, selected skills, saved service connection status, and approval cards.
+
+The sidebar and environment panel can be collapsed. The window adapts to narrower layouts and keeps the existing tray menu and pixel avatar identity.
+
+Each new chat has an independent agent session. Visible chat history is saved in this desktop app's local storage and survives restarts; it does not synchronize with Telegram or other devices. Chat switching is disabled while a request is running.
+
+| Shortcut | Action |
+|---|---|
+| `Enter` | Send a message |
+| `Shift+Enter` | Insert a newline |
+| `Ctrl+N` / `Cmd+N` | Start a new chat |
+
+The model button opens model settings. The access label reflects the configured policy; neither control silently changes permissions. Service badges indicate saved connection state, not a live credential check. An unavailable gateway is shown as offline rather than triggering first-run setup.
 
 ### Desktop first-run flow
 
@@ -505,6 +524,34 @@ npx hey models set openai/gpt-4.1
 ```
 
 The chat screen includes safe starter tasks for a first run. The Missions tab shows each mission's current status and planned steps; active missions can be paused or cancelled individually. Sensitive actions continue to appear as approval cards before they run.
+
+## Skills
+
+Open **Skills** in the desktop sidebar to search installed skills and inspect their complete instructions. Select up to six skills, return to the chat, and submit a task. Selected skills appear as removable chips above the composer and in the environment panel.
+
+Explicitly selected skills receive priority and their full instructions enter the model context. These requests use the general tool loop so a specialized harness cannot ignore the selected instructions; cancellation keeps its existing route. Without an explicit selection, HeyAgent keeps its automatic skill matching and specialized harnesses.
+
+To add a personal skill, create:
+
+```text
+~/.heyagent/skills/my-skill/SKILL.md
+```
+
+Example:
+
+```markdown
+---
+name: project-summary
+description: Summarize a project's README and file structure.
+---
+Read the README and inspect the project structure.
+Explain the entry points and available build and test commands.
+Distinguish observed facts from assumptions and cite the files inspected.
+```
+
+The catalog reloads when opened. Skills supply instructions to existing tools; selecting a skill does not install dependencies, connect accounts, or grant extra permissions. Repository skills are also loaded from `skills/`.
+
+See [Desktop workspace implementation and checks](docs/DESKTOP_WORKSPACE.md) for storage details, runtime behavior, and limitations. This update does not add Git worktrees, cloud execution, or subagents.
 
 ## Configuration
 
@@ -661,6 +708,14 @@ npx hey eval --all    # deterministic routing/harness evaluation
 npx hey metrics       # local harness success metrics
 npm audit --omit=dev
 ```
+
+Run the desktop renderer regression check on a machine with Electron support:
+
+```bash
+npx electron apps/desktop/scripts/smoke-ui.cjs
+```
+
+It checks skill selection and request payloads, safe response rendering, chat switching, persisted history, narrow-window layout, and offline behavior against an isolated mock server. It does not contact a real model or connected service. Screenshots are saved to the ignored `out/ui-check/` directory.
 
 CI runs lint, build, and tests on Linux and Windows.
 
