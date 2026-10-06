@@ -22,7 +22,7 @@
 
 ---
 
-HeyAgent is a local-first desktop agent for real work: it opens applications, controls the browser, reads the screen, works with files, creates Google Workspace documents, and can hold a conversation in Telegram Desktop while you control it remotely from a Telegram bot.
+HeyAgent is a local-first desktop agent for real work: it opens applications, controls the browser, reads the screen, works with files, creates Google Workspace documents, can hold a conversation in Telegram Desktop while you control it remotely from a Telegram bot — and it is a **coding agent** that edits, runs, tests, and commits real projects on your disk.
 
 It is Russian-first and typo-tolerant, but works with English requests as well.
 
@@ -171,6 +171,27 @@ The local API listens on `http://127.0.0.1:28789` by default.
 
 Talk naturally. You do not need to memorize tool names.
 
+### Coding agent
+
+HeyAgent doubles as a coding agent for the project on your disk. Point it at a folder and ask for real work — it inspects files, edits them, runs shell commands (tests, builds, git status/diff/commit) and verifies the result before reporting:
+
+```bash
+# Work in the current directory
+hey code "добавь endpoint /health и напиши тест на него"
+
+# Or pick a project folder explicitly
+hey code "исправь падающий тест в auth" --cwd C:\Projects\app
+hey ask "прогони билд и почини ошибки" --cwd C:\Projects\app
+```
+
+Inside `hey chat`, set the project folder for the whole session:
+
+```text
+/cwd C:\Projects\app
+```
+
+The coding loop is deliberately strict: it writes with read-back verification, runs `node --check` on JavaScript, `tsc --noEmit` when a TypeScript toolchain is present, the project's own `npm test`/`build` scripts, and `pytest` for Python projects. Destructive commands (`rm -rf`, `git push`, `git reset --hard`, `npm publish`, …) are blocked, and file access is sandboxed to the selected project folder. In the desktop app, select a project folder in the sidebar first.
+
 ```text
 Открой YouTube и найди хороший урок по дробям
 Пройди открытый тест по математике
@@ -187,15 +208,16 @@ Talk naturally. You do not need to memorize tool names.
 |---|---|
 | `npx hey onboard [--locale ru\|en]` | Create or update the agent identity |
 | `npx hey avatars` | Show the pixel avatar gallery |
-| `npx hey chat [sessionId]` | Start or continue an interactive session |
-| `npx hey ask "task"` | Run one task |
+| `npx hey chat [sessionId]` | Start or continue an interactive session (`/cwd` sets project folder) |
+| `npx hey ask "task" [--cwd dir]` | Run one task (coding defaults to the current folder) |
+| `npx hey code "task" [--cwd dir]` | Coding agent: edit, run, test, commit in a project |
 | `npx hey status` | Show identity and configuration status |
 | `npx hey models list` | List model providers |
 | `npx hey models auth <provider>` | Save provider credentials locally |
 | `npx hey models set <provider/model>` | Select the default model |
 | `npx hey models test` | Test the selected model |
 | `npx hey models fallbacks` | Manage model failover |
-| `npx hey connect <service>` | Connect Google, Gmail, Notion, or GitHub |
+| `npx hey connect <service>` | Connect Google, Gmail, or GitHub |
 | `npx hey integrations status` | Check integrations |
 | `npx hey telegram setup` | Save a Telegram bot token |
 | `npx hey telegram pair` | Restrict the bot to your chat |
@@ -437,16 +459,6 @@ External OAuth apps in Testing can require reauthorization after seven days. Run
 
 ## Other integrations
 
-### Notion
-
-1. Create an integration at [notion.so/my-integrations](https://www.notion.so/my-integrations).
-2. Share the target pages/databases with that integration.
-3. Run:
-
-```bash
-npx hey connect notion
-```
-
 ### GitHub
 
 Create a personal access token with only the permissions required for your intended workflow:
@@ -669,7 +681,7 @@ packages/
 ├── channels-telegram/   bot transport, long polling, voice STT
 ├── computer/            desktop, browser, screen, system controls
 ├── identity/            onboarding, avatars, workspace soul files
-├── integrations/        Google Workspace, Gmail, Notion, GitHub
+├── integrations/        Google Workspace, Gmail, GitHub
 ├── models/              providers, validation, model failover
 ├── orchestrator/        routing, planning, queue, verification
 ├── policy/              capability and approval policies

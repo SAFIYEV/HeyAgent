@@ -14,7 +14,6 @@ import {
   PROVIDERS,
   formatModelRef,
   resolveModelRef,
-  defaultFallbackChain,
   resolveApiKeyForProvider,
   listModelIds,
   type ModelRef,
@@ -27,6 +26,8 @@ export interface ChatCommandResult {
   effects?: {
     identityChanged?: boolean;
     modelChanged?: ModelRef;
+    /** Switch the session's coding workspace folder. */
+    workspaceChanged?: string;
   };
 }
 
@@ -49,6 +50,7 @@ function helpText(): string {
     "/switchmodel [provider/model] — сменить модель (без аргумента — список)",
     "/switchavatar [N|sprite-XX] — сменить аватар",
     "/switchname <имя> — переименовать агента",
+    "/cwd <папка> — рабочая папка проекта для задач кодирования",
     "/voice — меню голоса (1 вкл/выкл, 2 API key, 3 voice id)",
     "/help — эта справка",
     "",
@@ -110,12 +112,13 @@ async function switchModel(args: string): Promise<ChatCommandResult> {
       };
     }
     const config = await loadConfig();
-    const autoFb = defaultFallbackChain(parsed).map((r) => `${r.provider}/${r.model}`);
     config.models = {
       ...config.models,
       defaultProvider: parsed.provider,
       defaultModel: parsed.model,
-      fallbacks: config.models?.fallbacks?.length ? config.models.fallbacks : autoFb,
+      // A model switch is explicit: start with this one model, never carry
+      // over a fallback chain created for a previous selection.
+      fallbacks: [],
     };
     await saveConfig(config);
     return {
@@ -259,6 +262,25 @@ export async function tryHandleChatCommand(
       return switchName(args);
     case "voice":
       return handleVoiceCommand(args, channelKey);
+    case "cwd":
+    case "workspace": {
+      if (!args) {
+        return { handled: true, reply: "Укажи папку: /cwd C:\\Projects\\app — задачи кодирования пойдут в неё." };
+      }
+      const { stat } = await import("node:fs/promises");
+      const { resolve } = await import("node:path");
+      const target = resolve(args);
+      try {
+        if (!(await stat(target)).isDirectory()) throw new Error("not a directory");
+      } catch {
+        return { handled: true, reply: `Папка недоступна: ${target}` };
+      }
+      return {
+        handled: true,
+        reply: `✅ Рабочая папка проекта: ${target}`,
+        effects: { workspaceChanged: target },
+      };
+    }
     default:
       return { handled: false };
   }

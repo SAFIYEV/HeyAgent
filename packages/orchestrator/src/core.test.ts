@@ -9,6 +9,12 @@ import { IdempotencyGuard } from "./idempotency.js";
 import { generateId } from "@heyagent/shared";
 import type { Mission } from "./types.js";
 
+test("format-only reply instructions never become a messaging contact", () => {
+  for (const text of ["Ответь одним словом: привет. Не используй инструменты.", "Ответь кратко: привет", "Скажи только привет", "Ответь ровно: OK", "Ответь exactly: OK"]) {
+    assert.notEqual(routeTask(text).domain, "messaging");
+  }
+});
+
 test("router: telegram reply never goes to mail", () => {
   const r = routeTask("ответь алексу в telegram");
   assert.equal(r.domain, "messaging");
@@ -25,6 +31,44 @@ test("router: Russian stop is a terminal cancel route", () => {
 test("router: explicit mail still routes to mail", () => {
   const r = routeTask("открой почту gmail");
   assert.equal(r.domain, "mail");
+});
+
+test("router: building a Telegram bot uses coding tools", () => {
+  const r = routeTask("Создай мне телеграм бота, который будет напоминать об уроках за 10 минут. Составь график и бота");
+  assert.equal(r.domain, "coder");
+  assert.equal(dispatchAgent(r).harness, "coder");
+});
+
+test("router: software action wins over channel wording", () => {
+  for (const request of [
+    "Сделай Discord бота для напоминаний",
+    "Разработай Telegram сервис расписания уроков",
+    "Создай приложение с интеграцией Telegram",
+    "Сделай Vue панель администратора",
+  ]) {
+    const r = routeTask(request);
+    assert.equal(r.domain, "coder", request);
+    assert.equal(dispatchAgent(r).harness, "coder", request);
+  }
+  for (const request of [
+    "Напиши сообщение в Telegram",
+    "Отправь ответ в Discord",
+  ]) {
+    assert.equal(routeTask(request).domain, "messaging", request);
+  }
+});
+
+test("router: creating a calculator in a project uses coding tools", () => {
+  for (const request of [
+    "создай мне калькулятор",
+    "создай мне todo app",
+    "создай мне todoapp",
+    "Создай рабочий калькулятор в выбранной папке: HTML, CSS и JavaScript. Не используй браузер.",
+  ]) {
+    const route = routeTask(request);
+    assert.equal(route.domain, "coder", request);
+    assert.equal(dispatchAgent(route).harness, "coder", request);
+  }
 });
 
 test("router: latest news without an explicit PDF still uses the digest harness", () => {
@@ -197,6 +241,30 @@ test("router: Git workflow with README text uses coder, not notepad", () => {
   assert.equal(r.domain, "coder");
   assert.notEqual(r.slots.harness, "notepad.compose");
   assert.equal(dispatchAgent(r).harness, "coder");
+});
+
+test("router: code editing / testing / debugging tasks use the coding agent", () => {
+  for (const request of [
+    "исправь падающий тест в модуле auth",
+    "fix the failing build",
+    "поправь функцию парсинга в файле parser.ts",
+    "напиши скрипт для бэкапа базы",
+    "добавь endpoint /health в сервер",
+    "запусти тесты",
+    "прогони билд",
+    "проведи code review",
+    "объясни как работает функция retry",
+  ]) {
+    const route = routeTask(request);
+    assert.equal(route.domain, "coder", request);
+    assert.equal(dispatchAgent(route).harness, "coder", request);
+  }
+});
+
+test("router: generic notes and lists still stay out of coding", () => {
+  for (const request of ["напиши список покупок", "напиши рассказ про кота"]) {
+    assert.notEqual(routeTask(request).domain, "coder", request);
+  }
 });
 
 test("router: открой блокнот → desktop notepad, not browser", () => {

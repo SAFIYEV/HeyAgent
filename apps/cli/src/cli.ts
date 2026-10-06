@@ -58,7 +58,12 @@ export async function runCli(args: string[]): Promise<void> {
 
   const [cmd, ...rest] = args;
 
-  if (!cmd || cmd === "help" || cmd === "--help") {
+  if (!cmd) {
+    await cmdChat();
+    return;
+  }
+
+  if (cmd === "help" || cmd === "--help") {
     printHelp();
     return;
   }
@@ -75,7 +80,10 @@ export async function runCli(args: string[]): Promise<void> {
       await cmdChat(rest[0]);
       break;
     case "ask":
-      await cmdAsk(rest.join(" "));
+      await cmdAsk(...parseCwdArgs(rest));
+      break;
+    case "code":
+      await cmdCode(...parseCwdArgs(rest));
       break;
     case "status":
       await cmdStatus();
@@ -123,11 +131,12 @@ Usage: ${CLI_NAME} <command>
 Commands:
   onboard [--locale ru|en]  Set language, agent name, avatar, and model
   avatars              Show all pixel skins
-  chat [sessionId]     Interactive chat in terminal
-  ask <message>        Single question/ task
+  chat [sessionId]     Interactive chat in terminal (/cwd sets project folder)
+  ask <message> [--cwd <dir>]   Single question/task (coding defaults to current folder)
+  code <task> [--cwd <dir>]     Coding agent on a project: edit, run, test, commit
   status               Show agent identity and config status
   models list|set|auth|test|fallbacks|marketplace|aliases   LLM + Bedrock offers
-  connect <service>    Connect Google Workspace, Gmail, Notion, or GitHub
+  connect <service>    Connect Google Workspace, Gmail, or GitHub
   integrations status  Show connected services
   telegram setup|pair|status  Configure Telegram bot
   voice                       ElevenLabs + озвучка (chat и Telegram)
@@ -409,9 +418,16 @@ async function cmdChat(sessionId?: string): Promise<void> {
 
   let sessionModel: import("@heyagent/models").ModelRef | undefined;
   let liveIdentity = identity;
+  let sessionWorkspace: string | undefined;
 
   while (true) {
-    const line = await rl.question(`${liveIdentity?.name}> `);
+    let line: string;
+    try {
+      line = await rl.question(`${liveIdentity?.name}> `);
+    } catch {
+      // EOF (for example, piping one command from a script) is a normal exit.
+      break;
+    }
     if (line === "/exit" || line === "/quit") break;
     if (!line.trim()) continue;
 
@@ -423,6 +439,7 @@ async function cmdChat(sessionId?: string): Promise<void> {
     if (cmd.handled) {
       if (cmd.reply) console.log(`\n${cmd.reply}\n`);
       if (cmd.effects?.modelChanged) sessionModel = cmd.effects.modelChanged;
+      if (cmd.effects?.workspaceChanged) sessionWorkspace = cmd.effects.workspaceChanged;
       if (cmd.effects?.identityChanged) {
         liveIdentity = await loadIdentity();
         if (liveIdentity?.avatarId) {
@@ -442,6 +459,7 @@ async function cmdChat(sessionId?: string): Promise<void> {
         sessionId: currentSession,
         channel: "cli",
         modelRef: sessionModel,
+        workspaceDir: sessionWorkspace,
         onApprovalNeeded: async (desc: string, toolName?: string) => {
           animator?.stop();
           console.log(`\n📋 ${desc}\n`);
@@ -559,12 +577,44 @@ async function cmdVoice(args: string[]): Promise<void> {
   console.log(r.reply);
 }
 
-async function cmdAsk(message: string): Promise<void> {
+/** Split trailing "--cwd <dir>" (or --cwd=<dir>) from free-text args. */
+function parseCwdArgs(args: string[]): [string, string | undefined] {
+  const list = [...args];
+  let cwd: string | undefined;
+  for (let i = 0; i < list.length; i++) {
+    if (list[i] === "--cwd" && list[i + 1]) {
+      cwd = list[i + 1];
+      list.splice(i, 2);
+      break;
+    }
+    if (list[i]?.startsWith("--cwd=")) {
+      cwd = list[i]!.slice("--cwd=".length);
+      list.splice(i, 1);
+      break;
+    }
+  }
+  return [list.join(" "), cwd];
+}
+
+async function cmdAsk(message: string, cwd?: string): Promise<void> {
   if (!message) {
-    console.error("Usage: hey ask <message>");
+    console.error("Usage: hey ask <message> [--cwd <project folder>]");
     process.exit(1);
   }
-  const result = await agent.run(message, { channel: "cli" });
+  const result = await agent.run(message, { channel: "cli", workspaceDir: cwd });
+  console.log(result.response);
+  await maybeCliSpeak(result.response);
+}
+
+async function cmdCode(message: string, cwd?: string): Promise<void> {
+  if (!message) {
+    console.error("Usage: hey code <coding task> [--cwd <project folder>]");
+    console.error("Example: hey code \"исправь падающий тест в auth\" --cwd C:\\Projects\\app");
+    process.exit(1);
+  }
+  const workspaceDir = cwd ?? process.cwd();
+  console.error(`[workspace: ${workspaceDir}]`);
+  const result = await agent.run(message, { channel: "cli", workspaceDir });
   console.log(result.response);
   await maybeCliSpeak(result.response);
 }
@@ -840,16 +890,6 @@ Gmail сюда не входит: для почты используй npx hey c
     return;
   }
 
-  if (service === "notion") {
-    console.log("\nNotion connection");
-    console.log("Create integration at https://www.notion.so/my-integrations");
-    const token = await rl.question("Notion integration token: ");
-    await hub.saveNotionToken(token);
-    console.log("Notion connected.");
-    rl.close();
-    return;
-  }
-
   if (service === "github") {
     const token = await rl.question("GitHub personal access token: ");
     await hub.saveGitHubToken(token);
@@ -859,7 +899,7 @@ Gmail сюда не входит: для почты используй npx hey c
   }
 
   rl.close();
-  console.error("Usage: hey connect google|gmail|notion|github");
+  console.error("Usage: hey connect google|gmail|github");
 }
 
 async function cmdIntegrations(sub: string[]): Promise<void> {

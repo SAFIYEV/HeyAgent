@@ -61,6 +61,8 @@ const RE_MAIL = /(письм|mail|email|имейл|мейл|gmail|почт|inbox
 const RE_SYSTEM =
   /(громк|звук|volume|mute|ярк|brightness|хотспот|hotspot|wifi|wi-fi|bluetooth|блокир|lock|sleep|hibernate|shutdown|restart|перезагруз|выключ(и|ение)\s+(пк|комп|монитор)|корзин|recycle|тем\s*тем|night\s*light|обои|wallpaper)/i;
 const RE_OPEN_VERB = /^(открой|открыть|покажи|включи|найди|поищи)(\s|$)/i;
+const RE_BUILD_VERB = /(?:создай|сделай|разработай|собери|построй|реализуй|запрограммируй|build|create|implement|develop)/i;
+const RE_SOFTWARE_OBJECT = /(?:бот|bot|приложен\w*|app\b|сервис\w*|скрипт\w*|программ\w*|сайт|website|веб.?приложен\w*|интеграц\w*|плагин\w*|api\b|автоматизац\w*|напомин\w*|парсер\w*|игр\w*|панел\w*|dashboard|дашборд\w*|интерфейс\w*|frontend|фронтенд|компонент\w*)/i;
 
 const CONTACT_STOP =
   /^(на|по|в|во|к|ко|у|от|для|про|это|этот|тот|его|ее|их|ему|ей|ним|ней|вопрос|вопросы|тест|опрос|квиз|письмо|сообщение|чат|телеграм|telegram|тг|пожалуйста|мне|нам|там|сюда|туда|дым|сигарет|видео|урок|сайт|реферат|рассказ|стих|стишок|стать[юя]|доклад|эссе|текст|правду|сочинен\w*|заметк\w*|список|файл|документ|блокнот|notepad)$/i;
@@ -349,6 +351,11 @@ export function classifyIntent(text: string): ClassifiedIntent {
     !RE_MESSENGER.test(t) &&
     !writeToPerson &&
     !/(git\s|коммит|commit|репозитор|npm|node\.?js|http\s*endpoint|терминал|shell|powershell|cmd\.exe)/i.test(t) &&
+    // Software objects beat genre: «создай скрипт/проект/сервер» is never a
+    // notepad note, even if the request also contains the word «список».
+    !RE_SOFTWARE_OBJECT.test(t) &&
+    !/\.(py|js|ts|html|css|json|cs|java|go|rs)\b/i.test(t) &&
+    !/(папк\w*|каталог\w*|директори\w*|[a-z]:\\|\/home\/|\/users\/)/i.test(t) &&
     /(напиши|сочини|создай|запиши).{0,80}/i.test(t) &&
     RE_GENRE_ANY.test(t)
   ) {
@@ -368,6 +375,13 @@ export function classifyIntent(text: string): ClassifiedIntent {
     );
   }
 
+  // Resolve the requested action before the named channel. A Telegram/Discord
+  // mention is an implementation detail when the user asks to build a bot,
+  // service or app. Only explicit send/reply verbs remain messaging intents.
+  if (RE_BUILD_VERB.test(t) && RE_SOFTWARE_OBJECT.test(t)) {
+    return intent("coder", "coder", false, "one_shot", 96, "build software", {}, "coder");
+  }
+
   // 7. Messaging
   const conversationVerb =
     /(общайся|пообща(?:йся)?|поговори|поболт(?:ай)?|чат(?:иться)?|talk|chat)/i.test(t);
@@ -378,7 +392,14 @@ export function classifyIntent(text: string): ClassifiedIntent {
     /(до\s+прощания|до\s+свидания|until\s+goodbye)/i.test(t) ||
     (conversationVerb && (RE_MESSENGER.test(t) || Boolean(contactHit)));
   const namesMessenger = RE_MESSENGER.test(t);
-  if (namesMessenger || chatUntil || writeToPerson) {
+  // Code-edit verbs route to the coding agent even when they look like
+  // «напиши …» to a person-shaped word («объясни как работает функция»).
+  const codeEditVerb =
+    (/(исправь|поправь|почини|отрефактори|оптимизируй|обнови|доработай|прогони|запусти|выполни|fix|refactor|optimize|update|run)/i.test(t) &&
+      /(код|файл|функци|класс|модуль|тест|баг|ошибк|билд|сборк|code|file|function|class|module|test|bug|build)/i.test(t)) ||
+    (/(напиши|написать|создай|сделай|добавь|реализуй|write|create|add|implement)/i.test(t) &&
+      /(скрипт|функци|класс|модуль|endpoint|эндпоинт|\bapi\b|\bcli\b|парсер|плагин|бот\b|бота|сервис|сервер|\bcode\b|\bfunction\b)/i.test(t));
+  if (namesMessenger || chatUntil || (writeToPerson && !codeEditVerb)) {
     const endPhrase =
       (t.includes("до свидания") && "до свидания") ||
       (t.includes("прощания") && "прощания") ||
@@ -484,6 +505,23 @@ export function classifyIntent(text: string): ClassifiedIntent {
     );
   }
 
+  // Building software is a coding task even if the request mentions HTML or
+  // says not to use a browser. Route it before the broad browser keyword rule.
+  if (/(создай|сделай|напиши|собери|билд|построй|build|create).{0,100}(калькулятор|приложен|проект|игр[уы]|веб.?сайт|html|javascript|python|скрипт|программу|\bapp\b|\btodo\b|\btodo[\s-]*app\b|\bwebsite\b|\bweb\s*app\b)/i.test(t)) {
+    return intent("coder", "coder", false, "one_shot", 78, "build software", {}, "coder");
+  }
+
+  // Explicit software/code artifacts: «напиши скрипт», «сделай функцию парсинга»,
+  // «create a CLI». Generic «напиши текст/список» stays with notepad compose.
+  if (
+    /(напиши|написать|сделай|создай|добавь|реализуй|обнови).{0,80}(скрипт|функци|класс|модуль|endpoint|эндпоинт|\bapi\b|\bcli\b|парсер|плагин|бот\b|бота|сервис|сервер|тесты?\s+(на|для|к)\b|unit[\s-]?тест)/i.test(t) ||
+    /(скрипт|программ\w*)\s+(?:для|котор\w*|чтобы)\s/i.test(t) ||
+    /\.(py|js|ts|tsx|jsx|html|css|json|cs|java|go|rs|sh|ps1|sql)\b/i.test(t) &&
+      /(напиши|создай|добавь|измени|исправь|поправь|обнови|удали|прочитай|объясни|разбери|write|create|add|change|fix|update|remove|read|explain|refactor)/i.test(t)
+  ) {
+    return intent("coder", "coder", false, "one_shot", 72, "software artifact", {}, "coder");
+  }
+
   // 12. Browser keywords
   if (
     /(ютуб|youtube|браузер|browser|открой\s+(сайт|страниц)|википед|wikipedia|reddit|github\.com|вкладк)/i.test(
@@ -517,7 +555,13 @@ export function classifyIntent(text: string): ClassifiedIntent {
   }
 
   // 14. Coder
-  if (/(git\s|коммит|commit|репозитор|поправь\s+код|напиши\s+тест|refactor)/i.test(t)) {
+  if (
+    /(git\s|коммит|commit|репозитор|поправь\s+код|напиши\s+тест|refactor)/i.test(t) ||
+    /(исправь|поправь|почини|отрефактори|оптимизируй|обнови|доработай|fix|refactor|optimize|update).{0,60}(код|файл|функци|класс|модуль|тест|баг|ошибк|билд|сборк|code|file|function|class|module|test|bug|build)/i.test(t) ||
+    /(запусти|прогони|выполни).{0,40}(тесты?|билд|сборку|tests?|build|linter)/i.test(t) ||
+    /(дебаг|debug|отлад\w*)\s/i.test(t) ||
+    /(code\s*review|ревью\s+кода|разбер\w*\s+код|объясни\s+(?:код|функцию|как\s+работает))/i.test(t)
+  ) {
     return intent("coder", "coder", false, "one_shot", 65, "coder intent", {}, "coder");
   }
 
@@ -766,7 +810,7 @@ function isNonYoutubeOpenTask(t: string): boolean {
     RE_DOCS_WEB.test(t) ||
     RE_SITE.test(t) ||
     RE_NOTEPAD.test(t) ||
-    /(документ\w*|реферат|презентац|таблиц|sheet|slides|notion|figma|canva|gmail|почт|настройк)/i.test(
+    /(документ\w*|реферат|презентац|таблиц|sheet|slides|figma|canva|gmail|почт|настройк)/i.test(
       t,
     ) ||
     /(напиши|написать|сочини).{0,40}(реферат|текст|стать|эссе|доклад)/i.test(t)
@@ -775,6 +819,10 @@ function isNonYoutubeOpenTask(t: string): boolean {
 
 /** Real person after «напиши/ответь», not genre / quiz / open-content. */
 export function extractMessagingContact(raw: string, t: string): string {
+  if (/(?:не\s+используй|без)\s+инструмент|do not use tools|without tools/i.test(t)) return "";
+  // A formatting instruction ("reply exactly OK") is never a person's name.
+  // Sending it to Telegram is a dangerous false positive.
+  if (/(?:ответь|скажи|напиши)\s+(?:одним\s+словом|кратко|коротко|подробно|только|дословно|ровно|точно|exactly|briefly)/i.test(t) && !RE_MESSENGER.test(t)) return "";
   if (/(тест|опрос|квиз|quiz|вопрос\w*|вариант\w*|exam)/i.test(t)) return "";
   if (isGoogleDocsTask(t)) return "";
   if (RE_OPEN_VERB.test(t) && !RE_MESSENGER.test(t)) return "";
